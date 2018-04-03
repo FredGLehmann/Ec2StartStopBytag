@@ -10,6 +10,8 @@
 #############################################################################
 
 import boto3
+import os
+import time
 
 region = 'eu-west-1'
 
@@ -19,21 +21,21 @@ region = 'eu-west-1'
 # we are working to build a complete instances ID list, beginnning with all
 # runiing instances and remove from the list the instances ID which the stop time is not past
 #
-def allinone():
+def checkthem(actiontime):
 
     myec2instanceslist = []
 
     #First step : arret des serveurs qui tournent
     print ("Get Running EC2 Instances and stop them if necessary....")
     myec2instanceslist = get_instanceid_by_state("running")
-    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"stop")
+    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"stop",actiontime)
 
     myec2instanceslist = []
 
     #Second step : demarrage des serveurs arretes
     print ("Get Stopped EC2 Instances and start them if necessary....")
     myec2instanceslist = get_instanceid_by_state("stopped")
-    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"start")
+    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"start",actiontime)
 
 #
 # Get all the EC2 instances ID by state
@@ -72,7 +74,7 @@ def get_instanceid_by_state(state):
 #   instanceslist => EC2 instances list to check
 #   action => start or stop
 # Output : Nothing
-def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,action):
+def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,action,actiontime):
 
     idtodel = []
 
@@ -106,15 +108,15 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,action):
         else:
                 # if it's a working day
             if check_day(OpDays):
-                if check_slot(StartTime,StopTime,action) == 0:
+                if check_slot(StartTime,StopTime,action,actiontime) == 0:
                     print (InstanceName+" : State OK")
                     idtodel.append(instanceid)
-                elif check_slot(StartTime,StopTime,action) == 1:
+                elif check_slot(StartTime,StopTime,action,actiontime) == 1:
                     print (InstanceName+" : To "+action)
-                elif check_slot(StartTime,StopTime,action) == 2:
+                elif check_slot(StartTime,StopTime,action,actiontime) == 2:
                     if action == "start":
                         print (InstanceName+" : To Start")
-            elif (not(check_day(OpDays))) and (check_slot(StartTime,StopTime,action) == 2) and (action == "stop"):
+            elif (not(check_day(OpDays))) and (check_slot(StartTime,StopTime,action,actiontime) == 2) and (action == "stop"):
                 print (InstanceName+" : To Stop")
 
     for id in idtodel:
@@ -159,7 +161,7 @@ def verify_days_format(tagvalue):
 
     if re.match('^[aA-zZ]{3}(,[aA-zZ]{3})*$',tagvalue):
         return True
-        print (tagvalue+" : OpeningDays Format KO")
+        print (tagvalue + " : OpeningDays Format KO")
     else:
         return False
 
@@ -200,7 +202,7 @@ def check_day(tagvalue):
 #   1 : start or stop the instance
 #   2 : start and stop time are the same (but not 99)
 #
-def check_slot(tagvalue1,tagvalue2,state):
+def check_slot(tagvalue1,tagvalue2,state,actiontime):
 
     #print ("StartTime : "+tagvalue1)
     #print ("StopTime : "+tagvalue2)
@@ -209,7 +211,7 @@ def check_slot(tagvalue1,tagvalue2,state):
         if int(tagvalue2[:2]) == 99:
             return 0
         else:
-            if state == "stop" and check_time(tagvalue2) == 1:
+            if state == "stop" and check_time(tagvalue2,actiontime) == 1:
                 return 1
             else:
                 return 0
@@ -217,7 +219,7 @@ def check_slot(tagvalue1,tagvalue2,state):
         if int(tagvalue1[:2]) == 99:
             return 0
         else:
-            if state == "start" and check_time(tagvalue1) == 1:
+            if state == "start" and check_time(tagvalue1,actiontime) == 1:
                 return 1
             else:
                 return 0
@@ -225,12 +227,12 @@ def check_slot(tagvalue1,tagvalue2,state):
         return 2
     else:
         if state == "start":
-            if check_time(tagvalue1) == 1 and check_time(tagvalue2) == 0:
+            if check_time(tagvalue1,actiontime) == 1 and check_time(tagvalue2,actiontime) == 0:
                 return 1
             else:
                 return 0
         elif state == "stop":
-            if (check_time(tagvalue1) == 1 and check_time(tagvalue2) == 1) or (check_time(tagvalue1) == 0 and check_time(tagvalue2) ==
+            if (check_time(tagvalue1,actiontime) == 1 and check_time(tagvalue2,actiontime) == 1) or (check_time(tagvalue1,actiontime) == 0 and check_time(tagvalue2,actiontime) ==
  0):
                 return 1
             else:
@@ -243,17 +245,19 @@ def check_slot(tagvalue1,tagvalue2,state):
 # Input : StartDailyTime or StopDailyTime tag value
 # Output : 0 if ok / 1 if ko / 2 if 99
 #
-def check_time(tagvalue):
+def check_time(tagvalue,actiontime):
 
-    from datetime import time, datetime
-
-    #print ("Time : "+tagvalue)
-    now = datetime.now()
-    actualtime = now.time()
-    if tagvalue[8:9] == "+":
-        idgmttime = time(int(tagvalue[:2])-int(tagvalue[9:11]), int(tagvalue[3:5]), int(tagvalue[6:8]))
-    else:
-        idgmttime = time(int(tagvalue[:2])+int(tagvalue[9:11]), int(tagvalue[3:5]), int(tagvalue[6:8]))
+    from datetime import time
+    
+    actualtime = time(int(actiontime[:2]), int(actiontime[3:5]), int(actiontime[6:8]))
+    idgmttime = time(int(tagvalue[:2]), int(tagvalue[3:5]), int(tagvalue[6:8]))
+    
+    #now = datetime.now()
+    #actualtime = now.time()
+    #if tagvalue[8:9] == "+":
+    #    idgmttime = time(int(tagvalue[:2])-int(tagvalue[9:11]), int(tagvalue[3:5]), int(tagvalue[6:8]))
+    #else:
+    #    idgmttime = time(int(tagvalue[:2])+int(tagvalue[9:11]), int(tagvalue[3:5]), int(tagvalue[6:8]))
 
     if idgmttime <= actualtime:
         return 1
@@ -271,14 +275,31 @@ def ec2instances_action(instanceslist,action):
 
     ec2 = boto3.client('ec2', region_name=region)
 
-    if action == "start":
-        ec2.start_instances(InstanceIds=instanceslist)
-    else:
-        ec2.stop_instances(InstanceIds=instanceslist)
+    print("Action : "+ action)
+
+    #if action == "start":
+    #    ec2.start_instances(InstanceIds=instanceslist)
+    #else:
+    #    ec2.stop_instances(InstanceIds=instanceslist)
 
 #
 # Main
 #
 def lambda_handler(event, context):
-    allinone()
+    
+    from time import strftime
+    
+    # Print default lambda time
+    print ("Lambda default time : " + os.environ['TZ'])
+    
+    # Get the MYTIMEZONE environment variable (it's the server local timezone)
+    myTZ=os.environ['MYTIMEZONE']
+    # Set the lambda local TZ
+    os.environ['TZ'] = myTZ
+    time.tzset()
+    lambdatime=strftime("%H:%M:%S").upper()
+    print ("Right local time : "+ lambdatime)
+    
+    # go 
+    checkthem(lambdatime)
 

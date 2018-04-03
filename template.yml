@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion : '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: test serverless application.
+
+Resources:
+
+  test:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: startstop.lambda_handler
+      Runtime: python3.6
+      Environment:
+        Variables:
+          MYTIMEZONE: "Europe/Paris"
