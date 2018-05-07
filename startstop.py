@@ -5,7 +5,7 @@
 #
 #############################################################################
 #
-# Version 2
+# Version 3
 #
 #############################################################################
 
@@ -19,7 +19,7 @@ region = 'eu-west-1'
 # Principal function
 # As the start and stop commands take in option a list of instances ID
 # we are working to build a complete instances ID list, beginnning with all
-# runiing instances and remove from the list the instances ID which the stop time is not past
+# runnig instances and remove from the list the instances ID which the stop time is not past
 #
 def checkthem(actiontime):
 
@@ -292,8 +292,8 @@ def lambda_handler(event, context):
     # Print default lambda time
     print ("Lambda default time : " + os.environ['TZ'])
     
-    # Get the MYTIMEZONE environment variable (it's the server local timezone)
-    myTZ=os.environ['MYTIMEZONE']
+    # Get the MYTIMEZONE environment variable, if not exist set it to Paris timezone
+    myTZ=os.getenv('MYTIMEZONE','Europe/Paris')
     # Set the lambda local TZ
     os.environ['TZ'] = myTZ
     time.tzset()
