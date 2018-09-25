@@ -5,7 +5,7 @@
 #
 #############################################################################
 #
-# Version 4
+# Version 5
 #
 #############################################################################
 
@@ -97,15 +97,22 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,action,actiontime):
         StartTime = ""
         StopTime = ""
         OpDays = ""
-        for tags in myinstance.tags:
-            if tags["Key"] == tag1:
-                InstanceName = tags["Value"]
-            elif tags["Key"] == tag2:
-                StartTime = tags["Value"]
-            elif tags["Key"] == tag3:
-                StopTime = tags["Value"]
-            elif tags["Key"] == tag4:
-                OpDays = tags["Value"]
+        # check if instance have at least 1 tag (unless the list is empty)
+        if myinstance.tags :
+            if myinstance.tags == "" :
+                print ("Aucun tag")
+            else :
+                for tags in myinstance.tags:
+                    if tags["Key"] == tag1:
+                        InstanceName = tags["Value"]
+                    elif tags["Key"] == tag2:
+                        StartTime = tags["Value"]
+                    elif tags["Key"] == tag3:
+                        StopTime = tags["Value"]
+                    elif tags["Key"] == tag4:
+                        OpDays = tags["Value"]
+        else :
+            print(instanceid+" - "+state+" - No tags : leaving in the actual state")
         
         # Check if the tage Name exist, if not replace it by the instanceID
         if InstanceName == "":
