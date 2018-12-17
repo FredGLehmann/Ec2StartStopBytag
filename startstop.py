@@ -9,9 +9,9 @@
 #
 #############################################################################
 
-import boto3
 import os
 import time
+import stdexplib
 
 region = 'eu-west-1'
 
@@ -27,43 +27,15 @@ def checkthem(actiontime):
 
     #First step : arret des serveurs qui tournent
     print ("Get Running EC2 Instances and stop them if necessary....")
-    myec2instanceslist = get_instanceid_by_state("running")
+    myec2instanceslist = stdexplib.get_instanceid_by_state("running",region)
     get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"stop",actiontime)
 
     myec2instanceslist = []
 
     #Second step : demarrage des serveurs arretes
     print ("Get Stopped EC2 Instances and start them if necessary....")
-    myec2instanceslist = get_instanceid_by_state("stopped")
+    myec2instanceslist = stdexplib.get_instanceid_by_state("stopped",region)
     get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"start",actiontime)
-
-#
-# Get all the EC2 instances ID by state
-# Input : running / stopped
-# Output : list of running or stopped instances ID
-def get_instanceid_by_state(state):
-
-    instanceslist = []
-
-    ec2 = boto3.client(
-        'ec2',
-        region_name=region
-    )
-
-    ec2instances = ec2.describe_instances(
-        Filters=[
-            {
-                'Name': 'instance-state-name', 'Values': [state]
-            }
-        ]
-    )
-
-    for reservation in (ec2instances["Reservations"]):
-        for instance in reservation["Instances"]:
-            instanceslist.append(instance["InstanceId"])
-
-    print ("Instances found : ",len(instanceslist))
-    return instanceslist
 
 #
 # Get some tags values, and ask some other function to check the values
@@ -84,39 +56,16 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,action,actiontime):
     else :
             state = "Running"
 
-
-    myec2 = boto3.resource(
-        'ec2',
-        region_name=region
-    )
-
     # For each instance in instancelist, get the tags values
     for instanceid in instanceslist:
-        myinstance=myec2.Instance(instanceid)
-        InstanceName = ""
-        StartTime = ""
-        StopTime = ""
-        OpDays = ""
-        # check if instance have at least 1 tag (unless the list is empty)
-        if myinstance.tags :
-            if myinstance.tags == "" :
-                print ("Aucun tag")
-            else :
-                for tags in myinstance.tags:
-                    if tags["Key"] == tag1:
-                        InstanceName = tags["Value"]
-                    elif tags["Key"] == tag2:
-                        StartTime = tags["Value"]
-                    elif tags["Key"] == tag3:
-                        StopTime = tags["Value"]
-                    elif tags["Key"] == tag4:
-                        OpDays = tags["Value"]
-        else :
-            print(instanceid+" - "+state+" - No tags : leaving in the actual state")
-        
-        # Check if the tage Name exist, if not replace it by the instanceID
+
+        InstanceName = stdexplib.get_ec2tagvalue(instanceid,tag1,region)
         if InstanceName == "":
             InstanceName = instanceid
+
+        StartTime = stdexplib.get_ec2tagvalue(instanceid,tag2,region)
+        StopTime = stdexplib.get_ec2tagvalue(instanceid,tag3,region)
+        OpDays = stdexplib.get_ec2tagvalue(instanceid,tag4,region) 
         
         # check the consistency of the values
         if not(verify_time_format(StartTime)) or not(verify_time_format(StopTime)) or not(verify_days_format(OpDays)):
@@ -307,11 +256,11 @@ def ec2instances_action(instanceslist,action):
     if action == "start":
         for id in instanceslist:
             print (id+" starting")
-        ec2.start_instances(InstanceIds=instanceslist)
+        #ec2.start_instances(InstanceIds=instanceslist)
     else:
         for id in instanceslist:
             print (id+" stopping")
-        ec2.stop_instances(InstanceIds=instanceslist)
+        #ec2.stop_instances(InstanceIds=instanceslist)
 
 #
 # Main
