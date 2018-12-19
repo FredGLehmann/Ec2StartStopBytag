@@ -81,59 +81,42 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,action,actiontime):
         else:
             OpDays = instancesdata[index][4]
         
-#    # For each instance in instancelist, get the tags values
-#    for instanceid in instanceslist:
-#
-#        InstanceName = stdexplib.get_ec2tagvalue(instanceid,tag1,region)
-#        if InstanceName == "":
-#            InstanceName = instanceid
-#
-#        StartTime = stdexplib.get_ec2tagvalue(instanceid,tag2,region)
-#        StopTime = stdexplib.get_ec2tagvalue(instanceid,tag3,region)
-#        OpDays = stdexplib.get_ec2tagvalue(instanceid,tag4,region) 
+        # check the consistency of the values
+        if not(verify_time_format(StartTime)) or not(verify_time_format(StopTime)) or not(verify_days_format(OpDays)):
+            print (InstanceName+" - "+state+" - Tags missing or format ko : leaving in the actual state")
+            idtodel.append(instanceid)
+        # Check if we have something todo regarding the different values
+        else:
+            # if it's a working day
+            if check_day(OpDays):
+                if check_slot(StartTime,StopTime,action,actiontime) == 0:
+                    print (InstanceName+" - "+state+" - State OK")
+                    idtodel.append(instanceid)
+                elif check_slot(StartTime,StopTime,action,actiontime) == 1:
+                    print (InstanceName+" - "+state+" - To "+action)
+                elif check_slot(StartTime,StopTime,action,actiontime) == 2:
+                    if action == "start":
+                        print (InstanceName+" - "+state+" - To Start")
+            # If it's not a working day
+            elif (not(check_day(OpDays))):
+                if action == "stop":
+                    print (InstanceName+" - "+state+" - To Stop")
+                elif action == "start":
+                    print (InstanceName+" - "+state+" - State OK")
+                    idtodel.append(instanceid)
+            # Fall back
+            else:
+                print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
+                idtodel.append(instanceid)
 
-     
+    for id in idtodel:
+        instanceslist.remove(id)
 
-
-
-
-        
-#        # check the consistency of the values
-#        if not(verify_time_format(StartTime)) or not(verify_time_format(StopTime)) or not(verify_days_format(OpDays)):
-#            print (InstanceName+" - "+state+" - Tags missing or format ko : leaving in the actual state")
-#            idtodel.append(instanceid)
-#        # Check if we have something todo regarding the different values
-#        else:
-#            # if it's a working day
-#            if check_day(OpDays):
-#                if check_slot(StartTime,StopTime,action,actiontime) == 0:
-#                    print (InstanceName+" - "+state+" - State OK")
-#                    idtodel.append(instanceid)
-#                elif check_slot(StartTime,StopTime,action,actiontime) == 1:
-#                    print (InstanceName+" - "+state+" - To "+action)
-#                elif check_slot(StartTime,StopTime,action,actiontime) == 2:
-#                    if action == "start":
-#                        print (InstanceName+" - "+state+" - To Start")
-#            # If it's not a working day
-#            elif (not(check_day(OpDays))):
-#                if action == "stop":
-#                    print (InstanceName+" - "+state+" - To Stop")
-#                elif action == "start":
-#                    print (InstanceName+" - "+state+" - State OK")
-#                    idtodel.append(instanceid)
-#            # Fall back
-#            else:
-#                print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
-#                idtodel.append(instanceid)
-#
-#    for id in idtodel:
-#        instanceslist.remove(id)
-#
-#    if len(instanceslist) > 0:
-#        print (len(instanceslist)," instance(s) to ",action)
-#        ec2instances_action(instanceslist,action)
-#    else:
-#        print ("0 instance to ",action)
+    if len(instanceslist) > 0:
+        print (len(instanceslist)," instance(s) to ",action)
+        ec2instances_action(instanceslist,action)
+    else:
+        print ("0 instance to ",action)
 
 
 # Check the correct configuration of a time data based on REGEXP
