@@ -55,30 +55,44 @@ def get_instanceid_by_state(state,region):
 # Input1 : instance ID
 # Input2 : tags name
 # Input3 : AWS region
-# Output : value of the tag 
+# Output : list
+# Output Format : [instanceid1,instance1tag1,instance1tag2,....],[instanceid2,instance2tag1,instance2tag2,...],....
 #
-def get_ec2tagvalue(instanceid,tagname,region):
+def get_ec2tagsvalues(region,instanceslist,tagslist):
 
     import boto3
-    tagvalue = ""
+    returnlist = []
+    tempodata = []
 
-    myec2 = boto3.resource(
+    ec2 = boto3.resource(
         'ec2',
         region_name=region
     )
-
-    myinstance = myec2.Instance(instanceid)
-
-    if myinstance.tags:
-        if myinstance.tags == "":
-            tagvalue = ""
+    print ("list :",len(instanceslist))
+    for index1 in range(0, len(instanceslist), 1):
+        myinstance = ec2.Instance(instanceslist[index1])
+        tempodata.append(instanceslist[index1])
+        if myinstance.tags:
+            if myinstance.tags == "":
+                tagvalue = ""
+            else:
+                for index2 in range(0, len(tagslist), 1):
+                    for tags in myinstance.tags:
+                        if tags["Key"] == tagslist[index2]:
+                            tempodata.append(tags["Value"])
+                            find = 1
+                    if not(find == 1):
+                        tempodata.append("NO TAG")
+                    find = 0
         else:
-            for tags in myinstance.tags:
-                if tags["Key"] == tagname:
-                    tagvalue = tags["Value"]
-    else:
-        tagvalue = ""
+            tempodata.append("NO TAG")
+            tempodata.append("NO TAG")
+            tempodata.append("NO TAG")
+            tempodata.append("NO TAG")
 
-    return tagvalue
+        returnlist.append(tempodata)
+        tempodata = []
+
+    return returnlist
 
 #####################################################################################################################

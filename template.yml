@@ -9,7 +9,8 @@ Resources:
     Properties:
       Handler: startstop.lambda_handler
       Runtime: python3.6
-      Timeout: 60
+      Timeout: 600
+      MemorySize: 128
       Environment:
         Variables:
           MYTIMEZONE: "Europe/Paris"
