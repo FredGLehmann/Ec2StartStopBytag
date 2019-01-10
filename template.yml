@@ -14,3 +14,4 @@ Resources:
       Environment:
         Variables:
           MYTIMEZONE: "Europe/Paris"
+          REGION: "eu-west-1"

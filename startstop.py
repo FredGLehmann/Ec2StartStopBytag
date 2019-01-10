@@ -13,7 +13,7 @@ import os
 import time
 import stdexplib
 
-region = 'eu-west-1'
+region=os.getenv('REGION','eu-west-1')
 
 #
 # Principal function
@@ -28,14 +28,14 @@ def checkthem(actiontime):
     #First step : arret des serveurs qui tournent
     print ("Get Running EC2 Instances and stop them if necessary....")
     myec2instanceslist = stdexplib.get_instanceid_by_state("running",region)
-    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",["i-01a9be017b577d7f8"],"running",actiontime)
+    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"running",actiontime)
 
     myec2instanceslist = []
 
     #Second step : demarrage des serveurs arretes
-#    print ("Get Stopped EC2 Instances and start them if necessary....")
-#    myec2instanceslist = stdexplib.get_instanceid_by_state("stopped",region)
-#█  get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"start",actiontime)
+    print ("Get Stopped EC2 Instances and start them if necessary....")
+    myec2instanceslist = stdexplib.get_instanceid_by_state("stopped",region)
+    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"stopped",actiontime)
 
 #
 # Get some tags values, and ask some other function to check the values
@@ -55,7 +55,7 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,state,actiontime):
     instancesdata = stdexplib.get_ec2tagsvalues(region,instanceslist,[tag1,tag2,tag3,tag4])
 
     for index in range(0, len(instancesdata), 1):
-        print (instancesdata[index])
+        # print (instancesdata[index])
         instanceid = instancesdata[index][0]
         if instancesdata[index][1] == "NO TAG":
             InstanceName = instanceid
@@ -83,39 +83,48 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,state,actiontime):
             idtodel.append(instanceid)
         # Check if we have something todo regarding the different values
         else:
-            # if it's a working day
-            if stdexplib.check_day(OpDays):
-                if stdexploib.check_slot(StartTime,StopTime,state,actiontime) == 0:
+            if state == "running":
+                if stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 0:
+                    print (InstanceName+" - "+state+" - To Stop")
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 1:
                     print (InstanceName+" - "+state+" - State OK")
                     idtodel.append(instanceid)
-                elif stdexploib.check_slot(StartTime,StopTime,state,actiontime) == 1:
-                    if state == "Running":
-                        print (InstanceName+" - "+state+" - To Stop")
-                    else:
-                        print (InstanceName+" - "+state+" - To Start")
-                elif stdexploib.check_slot(StartTime,StopTime,state,actiontime) == 2:
-                    if state == "stopped":
-                        print (InstanceName+" - "+state+" - To Start")
-            # If it's not a working day
-            elif (not(stdexplib.check_day(OpDays))):
-                if state == "running":
-                    print (InstanceName+" - "+state+" - To Stop")
-                elif state == "stopped":
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 2:
+                    print (InstanceName+" - "+state+" - Manual Start and Stop")
+                    idtodel.append(instanceid)
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 3:
+                    print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
+                    idtodel.append(instanceid)
+            elif state == "stopped":
+                if stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 0:
                     print (InstanceName+" - "+state+" - State OK")
+                    idtodel.append(instanceid)
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 1:
+                    print (InstanceName+" - "+state+" - To Start")
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 2:
+                    print (InstanceName+" - "+state+" - Manual Start and Stop")
+                    idtodel.append(instanceid)
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 3:
+                    print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
                     idtodel.append(instanceid)
             # Fall back
             else:
                 print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
                 idtodel.append(instanceid)
 
+    if state == "running":
+        action = "stop"
+    else:
+        action = "start"
+
     for id in idtodel:
         instanceslist.remove(id)
 
     if len(instanceslist) > 0:
-        print (len(instanceslist)," instance(s) to ",action)
-        stdexplib.ec2instances_action(instanceslist,action)
+        print (len(instanceslist),state," instance(s) to ",action)
+        stdexplib.ec2instances_action(instanceslist,action,region)
     else:
-        print ("0 instance to ",action)
+        print ("0", state,"instance to",action)
 
 #
 # Main for Lambda

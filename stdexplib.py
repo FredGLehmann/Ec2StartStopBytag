@@ -105,6 +105,18 @@ def get_ec2tagsvalues(region,instanceslist,tagslist):
 #
 #####################################################################################################################
 #
+# Get RDS tag value
+#
+# Input1 : instance List
+# Input2 : tags name
+# Input3 : AWS region
+# Output : list
+# Output Format : [instanceid1,instance1tag1,instance1tag2,....],[instanceid2,instance2tag1,instance2tag2,...],....
+#
+def get_rdstagsvalues(region,instanceslist,tagslist):
+
+#####################################################################################################################
+#
 # Verify if the parameter is well formated for time rekognition (HH:MM:SS+HH:MM:SS)
 #
 # Input1 : data to analyse
@@ -149,33 +161,54 @@ def verify_days_format(data):
 #
 #####################################################################################################################
 #
-# Verify if in the parameter data, we can find a day similar to today
+# Verify if today and tomorrow is a working day
 #
 # Input1 : data to analyse (some days in three digit format, enclosed by "'")
-# Output : True (today is integrated in data) or False (today is not integrated in data)
+# Output : 
+#       0 => today and yesterday are not working days
+#       1 => today is a working day but not yesterady
+#       2 => only yesterday is a working day
+#       3 => today and yesterday are working days
+#       4 => Fall back
 #
 def check_day(data):
 
     from time import strftime
-    n = 0
+    td = 0
+    ye = 0
 
-    actualday = strftime("%a").upper()
+    fullweek = ["SUN","MON","TUE","WED","THU","FRI","SAT"]
+    today = strftime("%a").upper()
+    weekindex = strftime("%w")
+
+    if int(weekindex) == 0:
+        yesterday = fullweek[6]
+    else:
+        yesterday = fullweek[int(weekindex)-1]
 
     datasplit=data.split(",")
     for day in datasplit:
-        if day == actualday:
-            n=1
+        if day == today:
+            td=1
+        elif day == yesterday:
+            ye=1
 
-    if n == 1:
-        return True
+    if td == 0 and ye == 0:
+        return 0                # Today and yesterday are not working days
+    elif td == 1 and ye == 0:
+        return 1                # Today is a working day but not yesterday
+    elif td == 0 and ye == 1:
+        return 2                # only yesterday was a working day
+    elif td == 1 and ye == 1:
+        return 3                # Today and yesterday are working days
     else:
-        return False
+        return 4
 
 #####################################################################################################################
 #
 #####################################################################################################################
 #
-# Verify if in the parameter data, we can find a day similar to today
+# Verify if is the timeslot is the good one
 #
 # Input1 : starttime of the AWS object
 # Input2 : stoptime of the AWS object
@@ -189,19 +222,19 @@ def check_slot(starttime,stoptime,state,actiontime):
     #print ("StartTime : "+tagvalue1)
     #print ("StopTime : "+tagvalue2)
 
-    # If StartTime = 99
-    #   If StopTime=99 => do nothing
+    # If StartTime = 99                                                 (Manual start)
+    #   If StopTime=99 => do nothing                                    (manual start and manual stop)
     #   Else
-    #       If state=running and StopTime<ActualTime => stop server
+    #       If state=running and StopTime<ActualTime => stop server     (server running and stop time is past)
     #       Else
     #       Do nothing
-    # And If StopTime = 99
-    #   If StartTime=99 => Do nothing
+    # AndIf StopTime = 99
+    #   If StartTime=99 => Do nothing                                   (manual start and stop)
     #   Else
-    #       If State=stopped and StartTime<ActualTime => Start Server
+    #       If State=stopped and StartTime<ActualTime => Start Server   (server stopped and start time past)
     #       Else
     #       Do nothing
-    # And If StartTime<>99 and StopTime<>99 and StartTime=StopTime => 2
+    # And If StartTime<>99 and StopTime<>99 and StartTime=StopTime => 2 (start and stop are equal, referencing to workdays only)
     # Else
     #   If State=stopped
     #       If StartTime<Actualtime and StopTime>ActualTime => Start Server
@@ -211,38 +244,130 @@ def check_slot(starttime,stoptime,state,actiontime):
     #       Else => Do nothing
     #   Else
     #       => Do nothing
+    #
+    #
+    # AndIf StartTime<Stoptime                                               (timeslot based on a week day )
+    #   If State=stopped
+    #       If StartTime<Actualtime and StopTime>ActualTime => Start Server
+    #       Else => Do nothing
+    #   Else If State=running
+    #       If StartTime<ActualTime and StopTime>ActualTime or StartTime>ActuelTime and StopTime> ActualTime => Stop Server
+    #       Else => Do nothing
+    #   Else
+    #       => Do nothing
 
-    if int(tagvalue1[:2]) == 99:
-        if int(tagvalue2[:2]) == 99:
+    # AndIf StartTime>StopTime                                              (timeslot based on a night work)
+    #   If State=stopped
+    #       If StartTime<Actualtime and StopTime<ActualTime or StartTime>ActualTime and StopTime>ActualTime => Start Server (before or after the stop slot of the day)
+    #       Else => Do nothing
+    #   Else If State=running
+    #       If StartTime>ActualTime and StopTime<ActualTime => Stop Server      (in the stop slot)
+    #       Else => Do nothing
+    #   Else
+    #       => Do nothing
+    # Else
+    #   => Do Nothing
+
+    if int(starttime[:2]) == 99:
+        if int(stoptime[:2]) == 99:
             return 0
         else:
             if state == "running" and check_time(tagvalue2,actiontime) == 1:
                 return 1
             else:
                 return 0
-    elif int(tagvalue2[:2]) == 99:
-        if int(tagvalue1[:2]) == 99:
+    elif int(stoptime[:2]) == 99:
+        if int(starttime[:2]) == 99:
             return 0
         else:
             if state == "stopped" and check_time(tagvalue1,actiontime) == 1:
                 return 1
             else:
                 return 0
-    elif (int(tagvalue1[:2]) != 99) and (int(tagvalue2[:2]) != 99) and (tagvalue1 == tagvalue2):
+    elif (int(starttime[:2]) != 99) and (int(stoptime[:2]) != 99) and (starttime == stoptime):
         return 2
-    else:
+    elif (starttime < stoptime):
         if state == "stopped":
-            if check_time(tagvalue1,actiontime) == 1 and check_time(tagvalue2,actiontime) == 0:
+            if check_time(starttime,actiontime) == 1 and check_time(stoptime,actiontime) == 0:
                 return 1
             else:
                 return 0
         elif state == "running":
-            if (check_time(tagvalue1,actiontime) == 1 and check_time(tagvalue2,actiontime) == 1) or (check_time(tagvalue1,actiontime) == 0 and check_time(tagvalue2,actiontime) == 0):
+            if (check_time(starttime,actiontime) == 1 and check_time(stoptime,actiontime) == 1) or (check_time(starttime,actiontime) == 0 and check_time(stoptime,actiontime) == 0):
                 return 1
             else:
                 return 0
         else:
             return 0
+    elif (starttime > stoptime):
+        if state == "stopped":
+            if (check_time(starttime,actiontime) == 1 and check_time(stoptime,actiontime) == 1) or (check_time(starttime,actiontime) == 0 and check_time(stoptime,actiontime) == 0):
+                return 1
+            else:
+                return 0
+        elif state == "running":
+            if check_time(starttime,actiontime) == 0 and check_time(stoptime,actiontime) == 1:
+                return 1
+            else:
+                return 0
+        else:
+            return 0
+
+#####################################################################################################################
+#
+#####################################################################################################################
+#
+# Check if we are or not in a running slot
+#
+# Input1 : starttime of the AWS object
+# Input2 : stoptime of the AWS object
+# Input3 : openingsdays
+# Output :  0 => Not a running slot
+#           1 => Running Slot
+#           2 => manual start and stop
+#           3 => cannot determine
+#
+def check_slot2(starttime,stoptime,actiontime,actionday):
+
+    # check if one of the data time is 99
+    if int(starttime[:2]) == 99:
+        if int(stoptime[:2]) == 99:
+            return 2
+        else:
+            if check_time(stoptime,actiontime) == 1:
+                return 0
+            else:
+                return 1
+    elif int(stoptime[:2]) == 99:
+        if int(starttime[:2]) == 99:
+            return 2
+        else:
+            if check_time(starttime,actiontime) == 1:
+                return 1
+            else:
+                return 0
+
+    # check if we are on a day slot or a night slot
+    if (starttime < stoptime):              # We are in a day slot
+        if check_time(starttime,actiontime) == 1 and check_time(stoptime,actiontime) == 0 and check_day(actionday):
+            return 1
+        else:
+            return 0
+    elif (starttime > stoptime):            # We are in a night slot
+        if check_time(starttime,actualtime) == 1 and check_time(starttime,"23:59:59") == 0 and (check_day(actionday) == 1 or check_day(actionday) == 3):
+            return 1
+        elif check_time(starttime,"23:59:59") == 1 and check_time(stoptime,actualtime) and (check_day(actionday) == 1 or check_day(actionday) == 2 or check_day(actionday) == 3):
+            return 1
+        else:
+            return 0
+    elif (int(starttime[:2]) != 99) and (int(stoptime[:2]) != 99) and (starttime == stoptime):      # we are in a 24/24 slot
+        if check_day(actionday) == 1 or check_day(actionday) == 3:
+            return 1
+        else:
+            return 0
+
+    else:
+        return 3
 
 #####################################################################################################################
 #
@@ -275,7 +400,9 @@ def check_time(data,actiontime):
 # Input1 : ID list of instances
 # Output : Nothing
 #
-def ec2instances_action(instanceslist,action):
+def ec2instances_action(instanceslist,action,region):
+
+    import boto3
 
     ec2 = boto3.client('ec2', region_name=region)
 
