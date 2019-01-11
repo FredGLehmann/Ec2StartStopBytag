@@ -21,13 +21,75 @@
 
 #####################################################################################################################
 #
+# Get all the RCrDirStances cwARN state
+#
+# Input1 : available / stopped
+# Input2 : AWS region
+# Output : list of running or stopped instances ARN
+#
+def get_rdsinstanceid_by_state(state,region):
+
+    import boto3
+
+    instanceslist = []
+
+    rds = boto3.client(
+        'rds',
+        region_mane = region
+        )
+
+    rdsinstances = rds.descrive_db_instances()
+
+    for dbinstance in rdsinstances["DBInstances"]:
+        if dbinstance["DBInstanceStatu"] == state
+            instanceslist.append(dbinstance["DBInstanceArn"])
+
+    return instancelist
+
+
+#####################################################################################################################
+#
+#####################################################################################################################
+#
+# Get all the RCrDirStances cwARN state
+#
+# Input1 : available / stopped
+# Input2 : AWS region
+# Output : list of running or stopped instances ARN
+#
+def get_rdstagsvalues(region,instanceslist,tagslist):
+
+    import boto3
+
+    instanceslist = []
+
+    rds = boto3.client(
+        'rds',
+        region_mane = region
+        )
+
+    for instance in instanceslist:
+        rdsinstances = rds.descrive_db_instances(
+                DBInstanceIdentifier = instance
+                )
+        repsponses = rds.list_tags_for_resource(
+                ResourceName = instance
+                )
+
+
+    return instancelist
+
+
+######################################################################################################################
+#####################################################################################################################
+#
 # Get all the EC2 instances ID by state
 #
 # Input1 : running / stopped
 # Input2 : AWS region
 # Output : list of running or stopped instances ID
 #
-def get_instanceid_by_state(state,region):
+def get_ec2instanceid_by_state(state,region):
 
     import boto3
 
@@ -114,6 +176,8 @@ def get_ec2tagsvalues(region,instanceslist,tagslist):
 # Output Format : [instanceid1,instance1tag1,instance1tag2,....],[instanceid2,instance2tag1,instance2tag2,...],....
 #
 def get_rdstagsvalues(region,instanceslist,tagslist):
+
+    print ("Do nothing for the moment")
 
 #####################################################################################################################
 #
@@ -208,115 +272,6 @@ def check_day(data):
 #
 #####################################################################################################################
 #
-# Verify if is the timeslot is the good one
-#
-# Input1 : starttime of the AWS object
-# Input2 : stoptime of the AWS object
-# Input3 : actual state of the AWS object (running/stopped)
-# Output :  0 => do nothing
-#           1 => action
-#           2 => starttime and stoptime are the same but not 99
-#
-def check_slot(starttime,stoptime,state,actiontime):
-
-    #print ("StartTime : "+tagvalue1)
-    #print ("StopTime : "+tagvalue2)
-
-    # If StartTime = 99                                                 (Manual start)
-    #   If StopTime=99 => do nothing                                    (manual start and manual stop)
-    #   Else
-    #       If state=running and StopTime<ActualTime => stop server     (server running and stop time is past)
-    #       Else
-    #       Do nothing
-    # AndIf StopTime = 99
-    #   If StartTime=99 => Do nothing                                   (manual start and stop)
-    #   Else
-    #       If State=stopped and StartTime<ActualTime => Start Server   (server stopped and start time past)
-    #       Else
-    #       Do nothing
-    # And If StartTime<>99 and StopTime<>99 and StartTime=StopTime => 2 (start and stop are equal, referencing to workdays only)
-    # Else
-    #   If State=stopped
-    #       If StartTime<Actualtime and StopTime>ActualTime => Start Server
-    #       Else => Do nothing
-    #   Else If State=running
-    #       If StartTime<ActualTime and StopTime>ActualTime or StartTime>ActuelTime and StopTime> ActualTime => Stop Server
-    #       Else => Do nothing
-    #   Else
-    #       => Do nothing
-    #
-    #
-    # AndIf StartTime<Stoptime                                               (timeslot based on a week day )
-    #   If State=stopped
-    #       If StartTime<Actualtime and StopTime>ActualTime => Start Server
-    #       Else => Do nothing
-    #   Else If State=running
-    #       If StartTime<ActualTime and StopTime>ActualTime or StartTime>ActuelTime and StopTime> ActualTime => Stop Server
-    #       Else => Do nothing
-    #   Else
-    #       => Do nothing
-
-    # AndIf StartTime>StopTime                                              (timeslot based on a night work)
-    #   If State=stopped
-    #       If StartTime<Actualtime and StopTime<ActualTime or StartTime>ActualTime and StopTime>ActualTime => Start Server (before or after the stop slot of the day)
-    #       Else => Do nothing
-    #   Else If State=running
-    #       If StartTime>ActualTime and StopTime<ActualTime => Stop Server      (in the stop slot)
-    #       Else => Do nothing
-    #   Else
-    #       => Do nothing
-    # Else
-    #   => Do Nothing
-
-    if int(starttime[:2]) == 99:
-        if int(stoptime[:2]) == 99:
-            return 0
-        else:
-            if state == "running" and check_time(tagvalue2,actiontime) == 1:
-                return 1
-            else:
-                return 0
-    elif int(stoptime[:2]) == 99:
-        if int(starttime[:2]) == 99:
-            return 0
-        else:
-            if state == "stopped" and check_time(tagvalue1,actiontime) == 1:
-                return 1
-            else:
-                return 0
-    elif (int(starttime[:2]) != 99) and (int(stoptime[:2]) != 99) and (starttime == stoptime):
-        return 2
-    elif (starttime < stoptime):
-        if state == "stopped":
-            if check_time(starttime,actiontime) == 1 and check_time(stoptime,actiontime) == 0:
-                return 1
-            else:
-                return 0
-        elif state == "running":
-            if (check_time(starttime,actiontime) == 1 and check_time(stoptime,actiontime) == 1) or (check_time(starttime,actiontime) == 0 and check_time(stoptime,actiontime) == 0):
-                return 1
-            else:
-                return 0
-        else:
-            return 0
-    elif (starttime > stoptime):
-        if state == "stopped":
-            if (check_time(starttime,actiontime) == 1 and check_time(stoptime,actiontime) == 1) or (check_time(starttime,actiontime) == 0 and check_time(stoptime,actiontime) == 0):
-                return 1
-            else:
-                return 0
-        elif state == "running":
-            if check_time(starttime,actiontime) == 0 and check_time(stoptime,actiontime) == 1:
-                return 1
-            else:
-                return 0
-        else:
-            return 0
-
-#####################################################################################################################
-#
-#####################################################################################################################
-#
 # Check if we are or not in a running slot
 #
 # Input1 : starttime of the AWS object
@@ -325,7 +280,8 @@ def check_slot(starttime,stoptime,state,actiontime):
 # Output :  0 => Not a running slot
 #           1 => Running Slot
 #           2 => manual start and stop
-#           3 => cannot determine
+#           3 => leav in the actual state
+#           4 => cannot determine
 #
 def check_slot2(starttime,stoptime,actiontime,actionday):
 
@@ -337,7 +293,7 @@ def check_slot2(starttime,stoptime,actiontime,actionday):
             if check_time(stoptime,actiontime) == 1:
                 return 0
             else:
-                return 1
+                return 3
     elif int(stoptime[:2]) == 99:
         if int(starttime[:2]) == 99:
             return 2
@@ -367,7 +323,7 @@ def check_slot2(starttime,stoptime,actiontime,actionday):
             return 0
 
     else:
-        return 3
+        return 4
 
 #####################################################################################################################
 #

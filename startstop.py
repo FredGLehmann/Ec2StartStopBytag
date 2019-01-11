@@ -24,18 +24,48 @@ region=os.getenv('REGION','eu-west-1')
 def checkthem(actiontime):
 
     myec2instanceslist = []
+    instancesdata = []
 
-    #First step : arret des serveurs qui tournent
+    taglist = ["Name","StartDailyTime","StopDailyTime","OpeningDays"]
+
+    # First step : list the running servers and see if we must stop them
+    #
     print ("Get Running EC2 Instances and stop them if necessary....")
-    myec2instanceslist = stdexplib.get_instanceid_by_state("running",region)
-    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"running",actiontime)
+    myec2instanceslist = stdexplib.get_ec2instanceid_by_state("running",region)
+    instancesdata = stdexplib.get_ec2tagsvalues(region,myec2instanceslist,taglist)
+    actionlist = get_check_actions(instancesdata,myec2instanceslist,"running",actiontime)
+    if len(actionlist) > 0:
+        print (len(actionlist),"running instance(s) to stop")
+        stdexplib.ec2instances_action(actionlist,"stop",region)
+    else:
+        print ("0","running instance to stop")
 
     myec2instanceslist = []
+    instancesdata = []
 
-    #Second step : demarrage des serveurs arretes
+    # Second step : list the stopped servers and see if we must start them
+    #
     print ("Get Stopped EC2 Instances and start them if necessary....")
-    myec2instanceslist = stdexplib.get_instanceid_by_state("stopped",region)
-    get_check_actions("Name","StartDailyTime","StopDailyTime","OpeningDays",myec2instanceslist,"stopped",actiontime)
+    myec2instanceslist = stdexplib.get_ec2instanceid_by_state("stopped",region)
+    instancesdata = stdexplib.get_ec2tagsvalues(region,myec2instanceslist,taglist)
+    actionlist = get_check_actions(instancesdata,myec2instanceslist,"stopped",actiontime)
+    if len(actionlist) > 0:
+        print (len(actionlist),"stopped instance(s) to start")
+        stdexplib.ec2instances_action(actionlist,"start",region)
+    else:
+        print ("0","stopped instance to start")
+
+    # Third step : list the stopped RDS inctanes and see if we must start them
+    #
+    print ("Get Stopped RDS Instances and start them if necessary....")
+    myrdsinstanceslist = stdexplib.get_ec2instanceid_by_state("stopped",region)
+    instancesdata = stdexplib.get_rdstagsvalues(region,myec2instanceslist,taglist)
+    actionlist = get_check_actions(instancesdata,myec2instanceslist,"stopped",actiontime)
+    if len(actionlist) > 0:
+        print (len(actionlist),"stopped instance(s) to start")
+        stdexplib.rdsinstances_action(actionlist,"start",region)
+    else:
+        print ("0","stopped instance to start")
 
 #
 # Get some tags values, and ask some other function to check the values
@@ -47,12 +77,12 @@ def checkthem(actiontime):
 #   instanceslist => EC2 instances list to check
 #   action => start or stop
 # Output : Nothing
-def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,state,actiontime):
+def get_check_actions(instancesdata,instanceslist,state,actiontime):
 
     idtodel = []
     
-    taglist = [tag1,tag2,tag3,tag4]
-    instancesdata = stdexplib.get_ec2tagsvalues(region,instanceslist,[tag1,tag2,tag3,tag4])
+#    taglist = [tag1,tag2,tag3,tag4]
+#    instancesdata = stdexplib.get_ec2tagsvalues(region,instanceslist,[tag1,tag2,tag3,tag4])
 
     for index in range(0, len(instancesdata), 1):
         # print (instancesdata[index])
@@ -93,6 +123,9 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,state,actiontime):
                     print (InstanceName+" - "+state+" - Manual Start and Stop")
                     idtodel.append(instanceid)
                 elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 3:
+                    print (InstanceName+" - "+state+" - State Ok")
+                    idtodel.append(instanceid)
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 4:
                     print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
                     idtodel.append(instanceid)
             elif state == "stopped":
@@ -105,6 +138,9 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,state,actiontime):
                     print (InstanceName+" - "+state+" - Manual Start and Stop")
                     idtodel.append(instanceid)
                 elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 3:
+                    print (InstanceName+" - "+state+" - State Ok")
+                    idtodel.append(instanceid)
+                elif stdexplib.check_slot2(StartTime,StopTime,actiontime,OpDays) == 4:
                     print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
                     idtodel.append(instanceid)
             # Fall back
@@ -112,19 +148,11 @@ def get_check_actions(tag1,tag2,tag3,tag4,instanceslist,state,actiontime):
                 print (InstanceName+" : WARNING - Do not know which action to take : leaving in the actual state")
                 idtodel.append(instanceid)
 
-    if state == "running":
-        action = "stop"
-    else:
-        action = "start"
-
     for id in idtodel:
         instanceslist.remove(id)
 
-    if len(instanceslist) > 0:
-        print (len(instanceslist),state," instance(s) to ",action)
-        stdexplib.ec2instances_action(instanceslist,action,region)
-    else:
-        print ("0", state,"instance to",action)
+    return instanceslist
+
 
 #
 # Main for Lambda
