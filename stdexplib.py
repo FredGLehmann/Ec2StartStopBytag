@@ -8,7 +8,9 @@
 #
 # Functions Summary
 #
-#	- get_instanceid_by_state(state) / get all the Running or Stoped instances ID
+#       - get_rdsinstanceid_by_state(state,region) / get all the running or stopped RDS instances
+#       - get_rdstagsvalues(region,instanceslist,tagslist) / get some tag values from an instances ARN list
+#	- get_instanceid_by_state(state,region) / get all the Running or Stoped instances ID
 #       - get_ec2tagsvalues(region,instanceslist,tagslist) / get some tags values from an instances ID list
 #       - verify_time_format(data) / check data format for time rekognition
 #       - verify_days_format(data) / check data format for days rekognition
@@ -21,9 +23,9 @@
 
 #####################################################################################################################
 #
-# Get all the RCrDirStances cwARN state
+# Get all the RDS instances ARN by state
 #
-# Input1 : available / stopped
+# Input1 : state of the instances (available / stopped)
 # Input2 : AWS region
 # Output : list of running or stopped instances ARN
 #
@@ -41,7 +43,7 @@ def get_rdsinstanceid_by_state(state,region):
     rdsinstances = rds.descrive_db_instances()
 
     for dbinstance in rdsinstances["DBInstances"]:
-        if dbinstance["DBInstanceStatu"] == state
+        if dbinstance["DBInstanceStatu"] == state:
             instanceslist.append(dbinstance["DBInstanceArn"])
 
     return instancelist
@@ -51,17 +53,20 @@ def get_rdsinstanceid_by_state(state,region):
 #
 #####################################################################################################################
 #
-# Get all the RCrDirStances cwARN state
+# Get some tag values from an ARN RDS instances list
 #
-# Input1 : available / stopped
-# Input2 : AWS region
-# Output : list of running or stopped instances ARN
+# Input1 : AWS region
+# Input2 : list of instances ARN
+# Input3 : tags list
+# Output : list of tags values
+# Output Format : [instance1arn,instance1tag1,instance1tag2,....],[instance2arn,instance2tag1,instance2tag2,...],....
 #
 def get_rdstagsvalues(region,instanceslist,tagslist):
 
     import boto3
 
-    instanceslist = []
+    returnlist = []
+    tempodata = []
 
     rds = boto3.client(
         'rds',
@@ -71,16 +76,36 @@ def get_rdstagsvalues(region,instanceslist,tagslist):
     for instance in instanceslist:
         rdsinstances = rds.descrive_db_instances(
                 DBInstanceIdentifier = instance
-                )
-        repsponses = rds.list_tags_for_resource(
-                ResourceName = instance
-                )
+	)
+	tempodata.append(rdsinstances["DBInstanceIdentifier"])
+	responses = rds.list_tags_for_resource(
+		ResourceName = instance
+	)
+	if response.TagList:
+        	if response.TagList == "":
+			tagvalue = ""
+		else
+			for index in range(0, len(tagslist), 1):
+				for tags in response.TagList:
+					if tags["Key"] == tagslist[index]:
+                        		tempodata.append(tags["Value"])
+                        		find = 1
+                	if not(find == 1):
+                        	tempodata.append("NO TAG")
+                	find = 0
+        else:
+            for index in range(0, len(tagslist), 1):
+               	tempodata.append("NO TAG")
+
+	returnlist.append(tempodata)
+        tempodata = []
 
 
-    return instancelist
+    return returnlist
 
 
 ######################################################################################################################
+#
 #####################################################################################################################
 #
 # Get all the EC2 instances ID by state
@@ -165,20 +190,6 @@ def get_ec2tagsvalues(region,instanceslist,tagslist):
 
 #####################################################################################################################
 #
-#####################################################################################################################
-#
-# Get RDS tag value
-#
-# Input1 : instance List
-# Input2 : tags name
-# Input3 : AWS region
-# Output : list
-# Output Format : [instanceid1,instance1tag1,instance1tag2,....],[instanceid2,instance2tag1,instance2tag2,...],....
-#
-def get_rdstagsvalues(region,instanceslist,tagslist):
-
-    print ("Do nothing for the moment")
-
 #####################################################################################################################
 #
 # Verify if the parameter is well formated for time rekognition (HH:MM:SS+HH:MM:SS)

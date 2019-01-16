@@ -59,8 +59,8 @@ def checkthem(actiontime):
     #
     print ("Get Stopped RDS Instances and start them if necessary....")
     myrdsinstanceslist = stdexplib.get_ec2instanceid_by_state("stopped",region)
-    instancesdata = stdexplib.get_rdstagsvalues(region,myec2instanceslist,taglist)
-    actionlist = get_check_actions(instancesdata,myec2instanceslist,"stopped",actiontime)
+    instancesdata = stdexplib.get_rdstagsvalues(region,myrdsinstanceslist,taglist)
+    actionlist = get_check_actions(instancesdata,myrdsinstanceslist,"stopped",actiontime)
     if len(actionlist) > 0:
         print (len(actionlist),"stopped instance(s) to start")
         stdexplib.rdsinstances_action(actionlist,"start",region)
