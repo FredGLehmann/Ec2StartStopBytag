@@ -8,15 +8,16 @@
 #
 # Functions Summary
 #
-#       - get_rdsinstanceid_by_state(state,region) / get all the running or stopped RDS instances
-#       - get_rdstagsvalues(region,instanceslist,tagslist) / get some tag values from an instances ARN list
-#	- get_instanceid_by_state(state,region) / get all the Running or Stoped instances ID
-#       - get_ec2tagsvalues(region,instanceslist,tagslist) / get some tags values from an instances ID list
-#       - verify_time_format(data) / check data format for time rekognition
-#       - verify_days_format(data) / check data format for days rekognition
-#       - check_slot(starttime,stoptime,state,actiontime) / 
-#       - check_time(data,actiontime) / comprare time in data to actual time
-#       - ec2instances_action(instanceslist,action) /  start or stop instances, based on ID instances list
+# - get_rdsinstanceid_by_state(state,region) / get all the running or stopped RDS instances
+# - get_rdstagsvalues(region,instanceslist,tagslist) / get some tag values from an instances ARN list
+# - get_instanceid_by_state(state,region) / get all the Running or Stoped instances ID
+# - get_ec2tagsvalues(region,instanceslist,tagslist) / get some tags values from an instances ID list
+# - verify_time_format(data) / check data format for time rekognition
+# - verify_days_format(data) / check data format for days rekognition
+# - check_slot2(starttime,stoptime,state,actiontime) / Check if we are on  running slot or not
+# - check_time(data,actiontime) / comprare time in data to actual time
+# - ec2instances_action(instanceslist,action) /  start or stop instances, based on ID instances list
+# - rdsinstances_action(instanceslist,action,region) / start or stop RDS instances, based on ARN instances list
 #
 #####################################################################################################################
 
@@ -25,7 +26,7 @@
 #
 # Get all the RDS instances ARN by state
 #
-# Input1 : state of the instances (available / stopped)
+# Input1 : state of the search instances (available / stopped)
 # Input2 : AWS region
 # Output : list of running or stopped instances ARN
 #
@@ -43,7 +44,7 @@ def get_rdsinstanceid_by_state(state,region):
     rdsinstances = rds.descrive_db_instances()
 
     for dbinstance in rdsinstances["DBInstances"]:
-        if dbinstance["DBInstanceStatu"] == state:
+        if dbinstance["DBInstanceStatus"] == state:
             instanceslist.append(dbinstance["DBInstanceArn"])
 
     return instancelist
@@ -53,7 +54,7 @@ def get_rdsinstanceid_by_state(state,region):
 #
 #####################################################################################################################
 #
-# Get some tag values from an ARN RDS instances list
+# Get some tags values from an ARN RDS instances list
 #
 # Input1 : AWS region
 # Input2 : list of instances ARN
@@ -73,6 +74,11 @@ def get_rdstagsvalues(region,instanceslist,tagslist):
         region_mane = region
         )
 
+    # For any ARN of the instancelist, we get the instancename for log purpose
+    # then we get all the instance tags and chech it there are some interesting tags in it
+    # if not, we return the "NO TAG" value
+    # As the first asked tag is Name (because the list is a common list between RDS and Ec2, here we skip the 
+    # first tag in the tag list and replace it by a direct call to get the instance name
     for instance in instanceslist:
         rdsinstances = rds.descrive_db_instances(
                 DBInstanceIdentifier = instance
@@ -84,14 +90,14 @@ def get_rdstagsvalues(region,instanceslist,tagslist):
 	if response.TagList:
         	if response.TagList == "":
 			tagvalue = ""
-		else
-			for index in range(0, len(tagslist), 1):
+		else:
+			for index in range(1, len(tagslist), 1):
 				for tags in response.TagList:
 					if tags["Key"] == tagslist[index]:
-                        		tempodata.append(tags["Value"])
-                        		find = 1
-                	if not(find == 1):
-                        	tempodata.append("NO TAG")
+                        			tempodata.append(tags["Value"])
+                        			find = 1
+                		if not(find == 1):
+                        		tempodata.append("NO TAG")
                 	find = 0
         else:
             for index in range(0, len(tagslist), 1):
@@ -108,7 +114,7 @@ def get_rdstagsvalues(region,instanceslist,tagslist):
 #
 #####################################################################################################################
 #
-# Get all the EC2 instances ID by state
+# Get all EC2 instances ID by state
 #
 # Input1 : running / stopped
 # Input2 : AWS region
@@ -143,7 +149,7 @@ def get_ec2instanceid_by_state(state,region):
 #
 #####################################################################################################################
 #
-# Get an EC2 tag value
+# Get EC2 tags values
 #
 # Input1 : instance ID
 # Input2 : tags name
@@ -178,10 +184,8 @@ def get_ec2tagsvalues(region,instanceslist,tagslist):
                         tempodata.append("NO TAG")
                     find = 0
         else:
-            tempodata.append("NO TAG")
-            tempodata.append("NO TAG")
-            tempodata.append("NO TAG")
-            tempodata.append("NO TAG")
+            for index in range(0, len(tagslist), 1):
+               	tempodata.append("NO TAG")
 
         returnlist.append(tempodata)
         tempodata = []
@@ -236,7 +240,8 @@ def verify_days_format(data):
 #
 #####################################################################################################################
 #
-# Verify if today and tomorrow is a working day
+# Verify if today and yesterday is a working day (today for normal day oeration, and yesterday
+# for nightshift operation)
 #
 # Input1 : data to analyse (some days in three digit format, enclosed by "'")
 # Output : 
@@ -283,7 +288,7 @@ def check_day(data):
 #
 #####################################################################################################################
 #
-# Check if we are or not in a running slot
+# Check if we are or not in a running slot. Also managed the 99 start/stop option
 #
 # Input1 : starttime of the AWS object
 # Input2 : stoptime of the AWS object
@@ -365,6 +370,8 @@ def check_time(data,actiontime):
 # Action for Ec2 Instances
 #
 # Input1 : ID list of instances
+# Input2 : action to take (can be start or stop)
+# Input3 : in which region reside the instance in the instance list
 # Output : Nothing
 #
 def ec2instances_action(instanceslist,action,region):
@@ -382,6 +389,38 @@ def ec2instances_action(instanceslist,action,region):
             print (id+" stopping")
         #ec2.stop_instances(InstanceIds=instanceslist)
 
+#####################################################################################################################
+#
+#####################################################################################################################
+#
+# Action for RDS Instances
+#
+# Input1 : ID list (ARN) of RDS instances
+# Input2 : action to take (can be start or stop)
+# Input3 : in which region reside the instance in the instance list
+# Output : Nothing
+#
+def rdsinstances_action(instanceslist,action,region):
+
+    import boto3
+
+    rds = boto3.client('rds', region_name=region)
+
+    if action == "start":
+        for arn in instanceslist:
+		print (arn," starting")
+		rds.start_db_instance(
+                	DBInstanceIdentifier = arn
+		)
+    else:
+        for arn in instanceslist:
+		print (arn," stopping")
+		rds.stop_db_instance(
+                	DBInstanceIdentifier = arn
+		)
+
+#####################################################################################################################
+#
 #####################################################################################################################
 # The End
 #####################################################################################################################

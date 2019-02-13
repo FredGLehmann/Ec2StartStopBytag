@@ -1,7 +1,8 @@
 #############################################################################
 #
 # StartAndStopInstancesByTagReview
-# Start or stop EC2 instances regarding the StatrDailyTime or StopDailyTime Tags
+# Start or stop EC2 and RDS instances regarding the StatrDailyTime/StopDailyTime
+# and OpeningDays tags
 #
 #############################################################################
 #
@@ -55,7 +56,7 @@ def checkthem(actiontime):
     else:
         print ("0","stopped instance to start")
 
-    # Third step : list the stopped RDS inctanes and see if we must start them
+    # Third step : list the stopped RDS instances and see if we must start them
     #
     print ("Get Stopped RDS Instances and start them if necessary....")
     myrdsinstanceslist = stdexplib.get_ec2instanceid_by_state("stopped",region)
