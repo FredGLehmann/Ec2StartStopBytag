@@ -18,55 +18,81 @@ region=os.getenv('REGION','eu-west-1')
 
 #
 # Principal function
-# As the start and stop commands take in option a list of instances ID
-# we are working to build a complete instances ID list, beginnning with all
-# runnig instances and remove from the list the instances ID which the stop time is not past
+# As the start and stop commands take in option a list of instances ID (ec2) or instance identifier (rds)
+# we are working to build a complete instances ID/instance identifier list, beginnning with all
+# runnig instances and removing from the list the instances for which there is no action to take.
+#
+# 1/ build the list of instances ec2/rds running or stopped (ec2 : list of instances id / rds : list of database identifier)
+# 2/ get the tags of the instances (must return an array like
+#		- ec2 : [[id_instance1, hostname, starttime, stoptime, openiongdays],[id_instance2,......],[...]]
+#		- rds : [[ARN1, database identifier, starttime, stoptime, openiongdays],[ARN2,......],[...]]
+# 3/ read the tags data to check if it is time to start/stop the instance
 #
 def checkthem(actiontime):
 
-    myec2instanceslist = []
-    instancesdata = []
+	myec2instanceslist = []
+	instancesdata = []
 
-    taglist = ["Name","StartDailyTime","StopDailyTime","OpeningDays"]
+	serviceslist = ["ec2", "rds"]
+	stateslist = ["stopped"]
+	taglist = ["Name","StartDailyTime","StopDailyTime","OpeningDays"]
 
-    # First step : list the running servers and see if we must stop them
-    #
-    print ("Get Running EC2 Instances and stop them if necessary....")
-    myec2instanceslist = stdexplib.get_ec2instanceid_by_state("running",region)
-    instancesdata = stdexplib.get_ec2tagsvalues(region,myec2instanceslist,taglist)
-    actionlist = get_check_actions(instancesdata,myec2instanceslist,"running",actiontime)
-    if len(actionlist) > 0:
-        print (len(actionlist),"running instance(s) to stop")
-        stdexplib.ec2instances_action(actionlist,"stop",region)
-    else:
-        print ("0","running instance to stop")
+	# First step : list the running servers and see if we must stop them
+	#
+	print ("Get Running EC2 Instances and stop them if necessary....")
+	myec2instanceslist = stdexplib.get_ec2instanceid_by_state("running",region)
+	instancesdata = stdexplib.get_ec2tagsvalues(region,myec2instanceslist,taglist)
+	actionlist = get_check_actions(instancesdata,myec2instanceslist,"running",actiontime)
+	if len(actionlist) > 0:
+		print (len(actionlist),"running instance(s) to stop")
+		stdexplib.ec2instances_action(actionlist,"stop",region)
+	else:
+		print ("0","running instance to stop")
 
-    myec2instanceslist = []
-    instancesdata = []
+	myec2instanceslist = []
+	instancesdata = []
 
-    # Second step : list the stopped servers and see if we must start them
-    #
-    print ("Get Stopped EC2 Instances and start them if necessary....")
-    myec2instanceslist = stdexplib.get_ec2instanceid_by_state("stopped",region)
-    instancesdata = stdexplib.get_ec2tagsvalues(region,myec2instanceslist,taglist)
-    actionlist = get_check_actions(instancesdata,myec2instanceslist,"stopped",actiontime)
-    if len(actionlist) > 0:
-        print (len(actionlist),"stopped instance(s) to start")
-        stdexplib.ec2instances_action(actionlist,"start",region)
-    else:
-        print ("0","stopped instance to start")
+	# Second step : list the stopped servers and see if we must start them
+	#
+	print ("Get Stopped EC2 Instances and start them if necessary....")
+	myec2instanceslist = stdexplib.get_ec2instanceid_by_state("stopped",region)
+	instancesdata = stdexplib.get_ec2tagsvalues(region,myec2instanceslist,taglist)
+	actionlist = get_check_actions(instancesdata,myec2instanceslist,"stopped",actiontime)
+	if len(actionlist) > 0:
+		print (len(actionlist),"stopped instance(s) to start")
+		stdexplib.ec2instances_action(actionlist,"start",region)
+	else:
+		print ("0","stopped instance to start")
 
-    # Third step : list the stopped RDS instances and see if we must start them
-    #
-    print ("Get Stopped RDS Instances and start them if necessary....")
-    myrdsinstanceslist = stdexplib.get_ec2instanceid_by_state("stopped",region)
-    instancesdata = stdexplib.get_rdstagsvalues(region,myrdsinstanceslist,taglist)
-    actionlist = get_check_actions(instancesdata,myrdsinstanceslist,"stopped",actiontime)
-    if len(actionlist) > 0:
-        print (len(actionlist),"stopped instance(s) to start")
-        stdexplib.rdsinstances_action(actionlist,"start",region)
-    else:
-        print ("0","stopped instance to start")
+	# Third step : list the stopped RDS instances and see if we must start them
+	#
+	print ("Get stopped RDS Instances and start them if necessary....")
+	myrdsinstanceslist = stdexplib.get_rdsinstanceid_by_state("stopped",region)
+	if len(myrdsinstanceslist) > 0 : 
+		instancesdata = stdexplib.get_rdstagsvalues(region,myrdsinstanceslist,taglist)
+		actionlist = get_check_actions(instancesdata,myrdsinstanceslist,"stopped",actiontime)
+		if len(actionlist) > 0:
+			print (len(actionlist),"stopped instance(s) to start")
+			stdexplib.rdsinstances_action(actionlist,"start",region)
+		else:
+			print ("0","stopped instance to start")
+	else :
+		print ("No stopped instances")
+
+	# Fourth step : list the running RDS instances and see if we must stop them
+	#
+	print ("Get available RDS Instances and stop them if necessary....")
+	myrdsinstanceslist = stdexplib.get_rdsinstanceid_by_state("available",region)
+	if len(myrdsinstanceslist) > 0 : 
+		instancesdata = stdexplib.get_rdstagsvalues(region,myrdsinstanceslist,taglist)
+		actionlist = get_check_actions(instancesdata,myrdsinstanceslist,"running",actiontime)
+		if len(actionlist) > 0:
+			print (len(actionlist),"available instance(s) to stop")
+			stdexplib.rdsinstances_action(actionlist,"stop",region)
+		else:
+			print ("0","available instance to stop")
+	else :
+		print ("No available instances")
 
 #
 # Get some tags values, and ask some other function to check the values
@@ -86,7 +112,6 @@ def get_check_actions(instancesdata,instanceslist,state,actiontime):
 #    instancesdata = stdexplib.get_ec2tagsvalues(region,instanceslist,[tag1,tag2,tag3,tag4])
 
     for index in range(0, len(instancesdata), 1):
-        # print (instancesdata[index])
         instanceid = instancesdata[index][0]
         if instancesdata[index][1] == "NO TAG":
             InstanceName = instanceid

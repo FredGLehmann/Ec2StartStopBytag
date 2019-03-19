@@ -32,22 +32,22 @@
 #
 def get_rdsinstanceid_by_state(state,region):
 
-    import boto3
+	import boto3
 
-    instanceslist = []
+	instanceslist = []
 
-    rds = boto3.client(
-        'rds',
-        region_mane = region
-        )
+	rds = boto3.client(
+		'rds',
+		region_name = region
+	)
 
-    rdsinstances = rds.descrive_db_instances()
+	rdsinstances = rds.describe_db_instances()
 
-    for dbinstance in rdsinstances["DBInstances"]:
-        if dbinstance["DBInstanceStatus"] == state:
-            instanceslist.append(dbinstance["DBInstanceArn"])
+	for dbinstance in rdsinstances["DBInstances"]:
+		if dbinstance["DBInstanceStatus"] == state:
+			instanceslist.append(dbinstance["DBInstanceIdentifier"])
 
-    return instancelist
+	return instanceslist
 
 
 #####################################################################################################################
@@ -60,54 +60,58 @@ def get_rdsinstanceid_by_state(state,region):
 # Input2 : list of instances ARN
 # Input3 : tags list
 # Output : list of tags values
-# Output Format : [instance1arn,instance1tag1,instance1tag2,....],[instance2arn,instance2tag1,instance2tag2,...],....
+# Output Format : [[dbidentifier1,arn1,tag2,tag3....],[dbidentifier2,arn2,tag2,tag3...],....]
 #
 def get_rdstagsvalues(region,instanceslist,tagslist):
 
-    import boto3
+	import boto3
+	
+	returnlist = []
+	tempodata = []
+	find = 0
 
-    returnlist = []
-    tempodata = []
-
-    rds = boto3.client(
-        'rds',
-        region_mane = region
-        )
+	rds = boto3.client(
+		'rds',
+		region_name = region
+	)
 
     # For any ARN of the instancelist, we get the instancename for log purpose
-    # then we get all the instance tags and chech it there are some interesting tags in it
+    # then we get all the instance tags and chech if there are some interesting tags in it
     # if not, we return the "NO TAG" value
     # As the first asked tag is Name (because the list is a common list between RDS and Ec2, here we skip the 
     # first tag in the tag list and replace it by a direct call to get the instance name
-    for instance in instanceslist:
-        rdsinstances = rds.descrive_db_instances(
-                DBInstanceIdentifier = instance
-	)
-	tempodata.append(rdsinstances["DBInstanceIdentifier"])
-	responses = rds.list_tags_for_resource(
-		ResourceName = instance
-	)
-	if response.TagList:
-        	if response.TagList == "":
-			tagvalue = ""
+	print ("...",len(instanceslist),"founded")
+	for instance in instanceslist:
+		rdsinstancedata = rds.describe_db_instances(
+			DBInstanceIdentifier = instance
+		)
+		tempodata.append(instance)
+		tempodata.append("NO TAG")
+		tagsdata = rds.list_tags_for_resource(
+			ResourceName = rdsinstancedata["DBInstances"][0]["DBInstanceArn"]
+		)
+		if tagsdata["TagList"] :
+			if tagsdata["TagList"] == "":
+				for index in range(1, len(tagslist), 1):
+					tempodata.append("NO TAG")
+			else:
+				for index in range(1, len(tagslist), 1):
+					for tags in tagsdata["TagList"] :
+						if tags["Key"] == tagslist[index]:
+							tempodata.append(tags["Value"])
+							find = 1
+					if not(find == 1):
+						tempodata.append("NO TAG")
+				find = 0
 		else:
 			for index in range(1, len(tagslist), 1):
-				for tags in response.TagList:
-					if tags["Key"] == tagslist[index]:
-                        			tempodata.append(tags["Value"])
-                        			find = 1
-                		if not(find == 1):
-                        		tempodata.append("NO TAG")
-                	find = 0
-        else:
-            for index in range(0, len(tagslist), 1):
-               	tempodata.append("NO TAG")
+				tempodata.append("NO TAG")
 
-	returnlist.append(tempodata)
-        tempodata = []
+		returnlist.append(tempodata)
+		tempodata = []
 
-
-    return returnlist
+	# print (returnlist)
+	return returnlist
 
 
 ######################################################################################################################
@@ -167,7 +171,7 @@ def get_ec2tagsvalues(region,instanceslist,tagslist):
         'ec2',
         region_name=region
     )
-    print ("list :",len(instanceslist))
+    print ("...",len(instanceslist),"founded")
     for index1 in range(0, len(instanceslist), 1):
         myinstance = ec2.Instance(instanceslist[index1])
         tempodata.append(instanceslist[index1])
@@ -402,22 +406,22 @@ def ec2instances_action(instanceslist,action,region):
 #
 def rdsinstances_action(instanceslist,action,region):
 
-    import boto3
+	import boto3
 
-    rds = boto3.client('rds', region_name=region)
+	rds = boto3.client('rds', region_name=region)
 
-    if action == "start":
-        for arn in instanceslist:
-		print (arn," starting")
-		rds.start_db_instance(
-                	DBInstanceIdentifier = arn
-		)
-    else:
-        for arn in instanceslist:
-		print (arn," stopping")
-		rds.stop_db_instance(
-                	DBInstanceIdentifier = arn
-		)
+	if action == "start":
+		for arn in instanceslist:
+			print (arn," starting")
+		#	rds.start_db_instance(
+		#		DBInstanceIdentifier = arn
+		#	)
+	else:
+		for arn in instanceslist:
+			print (arn," stopping")
+		#	rds.stop_db_instance(
+		#		DBInstanceIdentifier = arn
+		#	)
 
 #####################################################################################################################
 #
