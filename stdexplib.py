@@ -330,9 +330,9 @@ def check_slot2(starttime,stoptime,actiontime,actionday):
         else:
             return 0
     elif (starttime > stoptime):            # We are in a night slot
-        if check_time(starttime,actualtime) == 1 and check_time(starttime,"23:59:59") == 0 and (check_day(actionday) == 1 or check_day(actionday) == 3):
+        if check_time(starttime,actiontime) == 1 and check_time(starttime,"23:59:59") == 0 and (check_day(actionday) == 1 or check_day(actionday) == 3):
             return 1
-        elif check_time(starttime,"23:59:59") == 1 and check_time(stoptime,actualtime) and (check_day(actionday) == 1 or check_day(actionday) == 2 or check_day(actionday) == 3):
+        elif check_time(starttime,"23:59:59") == 1 and check_time(stoptime,actiontime) and (check_day(actionday) == 1 or check_day(actionday) == 2 or check_day(actionday) == 3):
             return 1
         else:
             return 0
